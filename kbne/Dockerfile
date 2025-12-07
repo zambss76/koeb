@@ -1,6 +1,5 @@
 # ==========================================================
-# 第一阶段：构建器 (Builder Stage) - 用于下载和准备可执行文件
-# 目标：最小化最终镜像的大小
+# 第一阶段：构建器 (Builder Stage) - 下载 Xray 和 Supercronic
 # ==========================================================
 FROM ubuntu:22.04 AS builder
 
@@ -10,14 +9,11 @@ WORKDIR /app
 RUN set -x && \
     for i in 1 2 3; do apt-get update && break || sleep 5; done && \
     apt-get install -y --no-install-recommends wget unzip ca-certificates && \
-    # 下载 Xray-core
+    # 下载 Xray-core 
     wget https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip && \
     unzip Xray-linux-64.zip && \
     rm -f Xray-linux-64.zip && \
     mv xray xy && \
-    # 下载 ttyd
-    wget -O td https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64 && \
-    chmod +x td && \
     # 下载 supercronic
     wget -O supercronic https://github.com/aptible/supercronic/releases/latest/download/supercronic-linux-amd64 && \
     chmod +x supercronic && \
@@ -27,8 +23,7 @@ RUN set -x && \
 
 
 # ==========================================================
-# 第二阶段：最终镜像 (Final Stage) - 生产环境运行阶段
-# 目标：解决 apt-get 127 错误，优化安装命令
+# 第二阶段：最终镜像 (Final Stage) - Nginx, Xray, Supercronic
 # ==========================================================
 FROM ubuntu:22.04
 
@@ -45,11 +40,10 @@ COPY entrypoint.sh /entrypoint.sh
 COPY app /app
 
 # 核心修复和优化：清理特殊字符并合并安装/清理步骤
-# 将 tzdata 安装和配置时区放在一起
 RUN export DEBIAN_FRONTEND=noninteractive && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
-        tzdata openssh-server curl ca-certificates wget vim net-tools supervisor unzip iputils-ping telnet git iproute2 nginx && \
+        tzdata curl ca-certificates wget vim net-tools unzip iputils-ping telnet git iproute2 nginx supervisor && \
     # 配置时区
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
     echo $TZ > /etc/timezone && \
@@ -63,7 +57,6 @@ RUN export DEBIAN_FRONTEND=noninteractive && \
 
 # 从 builder 阶段复制可执行文件到最终镜像的 PATH 目录
 COPY --from=builder /app/xy /usr/local/bin/xy
-COPY --from=builder /app/td /usr/local/bin/td
 COPY --from=builder /app/supercronic /usr/local/bin/supercronic
 
 #暴露端口
